@@ -11,3 +11,166 @@
 # produced vignettes
 vignettes/*.html
 vignettes/*.pdf
+
+###########################
+####### My Own 2048 #######
+###########################
+
+### Pre-define Functions
+plotFun = function(newlabels = NULL, n = nsq)
+{
+    if(is.null(newlabels)) newlabels = 1:n^2
+    frame()
+    plot.window(xlim = c(0, 1), ylim = c(0, 1))
+    lapply(1:(n + 1), function(i) lines(c(1/n * (i - 1), 1/n * (i - 1)), c(0, 1)))
+    lapply(1:(n + 1), function(i) lines(c(0, 1), c(1/n * (i - 1), 1/n * (i - 1))))
+    text(rep(1:n / n - 1 / 2 / n, each = n), rep(n:1 / n - 1 / 2 / n, n), labels = newlabels, cex = 3, font = 2)
+}
+
+vecMove = function(myVec, direction = "l2r")
+{
+    if(!((direction == "l2r")|(direction == "r2l"))) stop("Direction should be \"l2r\" or \"r2l\"!")
+    numVec = as.numeric(Filter(function(x) !is.na(as.numeric(x)), myVec))
+    if(length(numVec) == 0) return(myVec)
+        
+    counterFun = function(myVec = numVec)
+    {
+        refList = list(myVec[1])
+        counterList = list()
+        counter = 1
+        for(i in seq_along(myVec)[-1])
+        {
+            if(myVec[i] == myVec[i - 1])
+            {
+                counter = counter + 1
+            } else
+            {
+                counterList = c(counterList, counter)
+                refList = c(refList, myVec[i])
+                counter = 1
+            }
+        }
+        counterList = c(counterList, counter)
+        
+        res = rbind(unlist(refList), unlist(counterList))
+        rownames(res) = c("Ref", "Counts")
+        res
+    }
+    
+    fil = function(myVec2 = numVec, direction = direction)
+    {
+        nfil = length(myVec2)
+        if(direction == "l2r") 
+        {
+            myIndex = 1:nfil
+        } else 
+        {
+            myIndex = nfil:1
+        }
+        
+        myVec2 = myVec2[myIndex]
+        
+        tmp = counterFun(myVec2)
+        
+        unlist(lapply(1:ncol(tmp), function(x) 
+            {
+                reps = tmp[2, x] %/% 2
+                mod = tmp[2, x] %% 2
+                
+                res = c(rep(tmp[1, x] * 2, reps), rep(tmp[1, x], mod))
+                names(res) = NULL
+                
+                res
+            }))
+    }
+    
+    res = fil(numVec, direction = direction)
+    newVec = c(res, rep("", length(myVec) - length(res)))
+    
+    if(direction == "r2l") newVec = rev(newVec)
+    
+    newVec
+}
+
+
+matMove = function(direction, num)
+{
+    function(mat) 
+    {
+        res = apply(mat, num, vecMove, direction = direction)
+        if(num == 1) res = t(res)
+        
+        res
+    }
+}
+
+matMove2l = matMove("l2r", 1)
+matMove2r = matMove("r2l", 1)
+matMove2t = matMove("l2r", 2)
+matMove2b = matMove("r2l", 2)
+
+### Game area
+nsq = 4
+counter = 1
+newlabels = c(2, 2, rep("", nsq^2 - 2))
+
+#newlabels = c("", "", "", "8192", "8", "", "4", "", "", "", "", "8", "", "", "", "4")
+while(T)
+{    
+    force(newlabels)
+    Sys.sleep(0.1)
+    plotFun(newlabels = newlabels)
+    polygon(c(1, 1.1, 1.1, 1, 1), c(1.1, 1.1, 1, 1, 1.1), xpd = T)
+    text(1.05, 1.05, "END", xpd = T, cex = 0.6)
+    
+    newMat = matrix(newlabels, nsq, nsq, byrow = F)
+    if(length(!is.na(as.numeric(newlabels))) == nsq^2 && all(matMove2t(newMat) == newMat) && all(matMove2t(newMat) == matMove2b(newMat)) && all(matMove2l(newMat) == matMove2b(newMat)) && all(matMove2r(newMat) == matMove2l(newMat))) 
+    {
+        text(0.5, 0.5, "No More Move", cex = 3, font = 2)
+        break
+    }
+    
+    l1 = locator(1)
+    if(all(l1$x > 1, l1$y >1)) 
+    {
+        text(0.5, 0.5, "Game Ends!", cex = 3, font = 2)
+        break
+    }
+
+    sv = c(0, 1)
+    v1 = c(l1$x - 0.5, l1$y - 0.5)
+    theta <- acos(sum( sv * v1) / (sqrt(sum(sv * sv)) * sqrt(sum(v1 * v1))))
+    
+    if((v1[2] > 0) & (abs(theta) <= 0.7854)) {direction = "m2t"
+    }else if((v1[2] < 0) & (abs(theta) >= 2.3562)) {direction = "m2b"
+    }else if((v1[1] > 0) & (0.7854 < theta) & (theta < 2.3562)) {direction = "m2r"
+    }else {direction = "m2l"}
+    
+    matFun = switch(direction, m2t = matMove2t, m2b = matMove2b, m2r = matMove2r, m2l = matMove2l)
+    
+    newMat = matFun(newMat)
+    newVec = as.vector(newMat)
+
+    if(identical(newVec, newlabels)) 
+    {
+        next
+    } else 
+    {
+        newlabels = newVec
+    }
+    
+    tmpSe = which(newlabels == "")
+    if(length(tmpSe) == 1) 
+    {
+        tmp = tmpSe
+        newlabels[tmpSe] = sample(c(2, 4), 1, prob = c(0.95, 0.05))
+    } else if(length(tmpSe) > 1) 
+    {
+        tmp = sample(tmpSe, 1)
+        newlabels[tmp] = sample(c(2, 4), 1, prob = c(0.95, 0.05))
+    } else
+    {
+        next
+    }
+    counter = counter + 1
+}
